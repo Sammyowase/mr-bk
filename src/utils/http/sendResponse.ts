@@ -1,0 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { Response } from "express";
+
+const sendResponse = (
+  res: Response,
+  statusCode: number,
+  message: string,
+  data?: any,
+): void => {
+  res.status(statusCode).json({
+    status: statusCode >= 200 && statusCode <= 399 ? "success" : "error",
+    message,
+    error: statusCode >= 200 && statusCode <= 399 ? false : true,
+    data: data || null,
+  });
+};
+
+export default sendResponse;

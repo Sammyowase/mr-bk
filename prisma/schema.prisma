@@ -1,0 +1,532 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String
+  userName  String
+  password  String
+  email     String   @unique
+  phone     String?
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  ManagedProperties      Property?               @relation("ManagerToProperty")
+  AuthoredProperties     Property[]              @relation("AuthorToProperty")
+  Houses                 House[]
+  Transactions           Transaction[]
+  Withdrawals            WithdrawalBank[]
+  Meter                  Meter[]
+  AuditLog               AuditLog[]              @relation("AuditToDoer")
+  UserRestriction        UserRestriction[]
+  AccessToken            AccessToken[]           @relation("TokenIssuer")
+  GuestEntry             GuestEntry[]            @relation("SecurityHandler")
+  SecurityAssignments    SecurityAssignment[]
+  NotificationPreference NotificationPreference?
+  AlertReads             AlertRead[]
+  EngagementInteractions EngagementInteraction[]
+}
+
+model House {
+  id         String    @id @default(uuid())
+  name       String
+  propertyId String
+  meterId    String?
+  type       HouseType @default(flat)
+  address    String    @db.VarChar(255)
+  authorId   String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  Property    Property      @relation(fields: [propertyId], references: [id])
+  Author      User          @relation(fields: [authorId], references: [id])
+  Meter       Meter?
+  Transaction Transaction[]
+  AccessPoint AccessPoint[]
+}
+
+model Meter {
+  id           String        @id @default(uuid())
+  propertyId   String?
+  houseId      String?       @unique
+  ownerId      String?
+  type         MeterType     @default(three_dual)
+  name         String?
+  number       String        @unique
+  price        Float?
+  vat          Float?
+  status       MeterStatus   @default(active)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  Property     Property?     @relation(fields: [propertyId], references: [id])
+  House        House?        @relation(fields: [houseId], references: [id])
+  Owner        User?         @relation(fields: [ownerId], references: [id])
+  Transactions Transaction[]
+}
+
+model Otp {
+  id        String   @id @default(uuid())
+  otp       String
+  email     String
+  data      String?  @db.VarChar(1000)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Property {
+  id                  String               @id @default(uuid())
+  name                String               @unique
+  type                PropertyType
+  address             String               @db.VarChar(255)
+  city                String?
+  state               String?
+  country             String?
+  tarrif              Float
+  tax                 Float?
+  managerId           String?              @unique
+  minVend             Float?
+  maxVend             Float?
+  isVendingSuspended  Boolean              @default(false)
+  authorId            String
+  auditRef            String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  Author              User                 @relation("AuthorToProperty", fields: [authorId], references: [id])
+  Manager             User?                @relation("ManagerToProperty", fields: [managerId], references: [id])
+  Houses              House[]
+  Meters              Meter[]
+  Transactions        Transaction[]
+  paymentSplit        PaymentSplit?
+  AuditLog            AuditLog[]           @relation("AuditToProperty")
+  AccessPoint         AccessPoint[]
+  SecurityAssignments SecurityAssignment[]
+}
+
+model Transaction {
+  id           String       @id @default(uuid())
+  userId       String
+  propertyId   String?
+  houseId      String?
+  meterNumber  String
+  amount       Float
+  token        String?
+  units        String?
+  trxnRef      String?
+  trxnPayload  String?      @db.VarChar(1000)
+  tokenPayload String?      @db.VarChar(1000)
+  status       TrxnStatus   @default(pending)
+  channel      TrxnChannel
+  type         TrxnType     @default(electricity)
+  category     TrxnCategory @default(electricity)
+  remark       String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  User         User         @relation(fields: [userId], references: [id])
+  Property     Property?    @relation(fields: [propertyId], references: [id])
+  House        House?       @relation(fields: [houseId], references: [id])
+  Meter        Meter?       @relation(fields: [meterId], references: [id])
+  meterId      String?
+}
+
+model WithdrawalBank {
+  id             String   @id @default(uuid())
+  bank_name      String
+  bank_code      String
+  account_number String
+  account_name   String
+  ownerId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  User           User     @relation(fields: [ownerId], references: [id])
+}
+
+model PaymentSplit {
+  id         String   @id @default(uuid())
+  name       String
+  split_code String
+  propertyId String   @unique
+  Property   Property @relation(fields: [propertyId], references: [id])
+}
+
+model AuditLog {
+  ref         String   @id @default(cuid())
+  userId      String
+  role        String
+  action      String
+  entity      String?
+  description String?
+  propertyId  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  RelatedProperty Property? @relation("AuditToProperty", fields: [propertyId], references: [id])
+  ActionBy        User      @relation("AuditToDoer", fields: [userId], references: [id])
+
+  @@index([userId, role, action, propertyId])
+}
+
+model Restriction {
+  id               String            @id @default(uuid())
+  type             String            @unique
+  UserRestrictions UserRestriction[]
+}
+
+model UserRestriction {
+  id            String   @id @default(uuid())
+  userId        String
+  restrictionId String
+  createdAt     DateTime @default(now())
+
+  User        User        @relation(fields: [userId], references: [id])
+  Restriction Restriction @relation(fields: [restrictionId], references: [id])
+
+  @@unique([userId, restrictionId])
+}
+
+model Fee {
+  id   String @id @default(nanoid(5))
+  type String @unique
+  rate Float
+}
+
+// Access Control
+model AccessPoint {
+  id           String          @id @default(uuid())
+  name         String // e.g., "Main Gate", "Gym Door", etc.
+  description  String?
+  type         AccessPointType
+  propertyId   String
+  houseId      String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  Property     Property        @relation(fields: [propertyId], references: [id])
+  House        House?          @relation(fields: [houseId], references: [id])
+  guestEntries GuestEntry[]
+  AccessToken  AccessToken[]
+}
+
+model AccessToken {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  type          AccessType
+  status        AccessStatus @default(active)
+  issuedById    String
+  issuedBy      User         @relation("TokenIssuer", fields: [issuedById], references: [id])
+  guestName     String
+  guestPhotoUrl String?
+  validFrom     DateTime
+  validUntil    DateTime
+  accesspointId String
+  AccessPoint   AccessPoint  @relation(fields: [accesspointId], references: [id])
+  guestEntries  GuestEntry[]
+  createdAt     DateTime     @default(now())
+}
+
+model GuestEntry {
+  id               String         @id @default(uuid())
+  accessTokenId    String
+  accessToken      AccessToken    @relation(fields: [accessTokenId], references: [id])
+  guestName        String
+  guestItems       String?
+  securityId       String
+  security         User           @relation("SecurityHandler", fields: [securityId], references: [id])
+  accessPointId    String
+  accessPoint      AccessPoint    @relation(fields: [accessPointId], references: [id])
+  photoCapturedUrl String?
+  entryTime        DateTime
+  exitTime         DateTime?
+  accessStatus     AccessDecision @default(pending)
+  createdAt        DateTime       @default(now())
+}
+
+model Notification {
+  id           String             @id @default(uuid())
+  title        String
+  message      String
+  type         NotificationType[]
+  data         Json?
+  recipientIds String[]
+  status       NotificationStatus @default(pending)
+  scheduledAt  DateTime?
+  readAt       DateTime?
+  readBy       String[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model NotificationPreference {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  User       User     @relation(fields: [userId], references: [id])
+  email      Boolean  @default(true)
+  sms        Boolean  @default(true)
+  push       Boolean  @default(true)
+  inApp      Boolean  @default(true)
+  newsletter Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+}
+
+model SecurityAssignment {
+  id         String   @id @default(uuid())
+  userId     String
+  propertyId String
+  Security   User     @relation(fields: [userId], references: [id])
+  Property   Property @relation(fields: [propertyId], references: [id])
+
+  @@unique([userId, propertyId])
+}
+
+model Alert {
+  id           String       @id @default(uuid())
+  title        String
+  body         String
+  category     AlertCategory
+  priority     AlertPriority
+  audienceType String       // building, property, unit, user, all
+  audienceIds  String[]     // IDs of the audience entities
+  createdBy    String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  expiresAt    DateTime?
+  reads        AlertRead[]
+}
+
+model AlertRead {
+  id        String   @id @default(uuid())
+  alertId   String
+  userId    String
+  readAt    DateTime @default(now())
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([alertId, userId])
+}
+
+model Event {
+  id           String       @id @default(uuid())
+  eventId      String       @unique
+  title        String
+  description  String?
+  startsAt     DateTime
+  endsAt       DateTime?
+  location     String?
+  audienceType String
+  audienceIds  String[]
+  status       EventStatus  @default(active)
+  createdBy    String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+enum EventStatus {
+  active
+  cancelled
+  completed
+}
+
+model EngagementPost {
+  id           String         @id @default(uuid())
+  title        String
+  content      String
+  type         EngagementType
+  options      Json?          // For polls: array of options
+  audienceType String         // building, property, unit, user, all
+  audienceIds  String[]       // IDs of the audience entities
+  createdBy    String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  expiresAt    DateTime?
+  interactions EngagementInteraction[]
+}
+
+model EngagementInteraction {
+  id             String         @id @default(uuid())
+  postId         String
+  userId         String
+  interactionType InteractionType
+  content        String?        // Comment text or selected option
+  createdAt      DateTime       @default(now())
+  post           EngagementPost @relation(fields: [postId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+}
+
+// Enum 
+enum AccessType {
+  qr
+  numeric
+}
+
+enum AccessStatus {
+  active
+  used
+  revoked
+  expired
+}
+
+enum AccessDecision {
+  granted
+  denied
+  pending
+}
+
+enum AccessPointType {
+  main_gate // Primary entrance to estate or compound
+  pedestrian_gate // Walk-in access (side entrances, staff/visitors)
+  service_gate // Vendors, contractors, logistics delivery point
+  parking_entry // Vehicle entry point (private or shared)
+  parking_exit // Vehicle exit point
+  reception_door // Main reception or front desk access
+  apartment_door // Unit-specific doors (smart locks, sensors)
+  elevator // Access to elevators (floor-level restriction)
+  clubhouse // Lounge, clubhouse or social area
+  gym_entrance // Gym or fitness area
+  pool_area // Swimming pool access gate
+  playground // Kids' area or sports court
+  utility_room // Restricted maintenance or electrical room
+  security_room // Guard post or surveillance control center
+  back_exit // Hidden or secondary exit
+  rooftop_access // Terrace or roof-top
+  basement_entry // Basement/staff or equipment zones
+  visitor_kiosk // Digital or manned visitor check-in point
+  bike_locker // Smart access to bike/e-scooter storage
+  ev_charging_station // Smart entry to EV zones or enclosures
+}
+
+enum NotificationType {
+  sms
+  email
+  whatsapp
+  push
+  inapp
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+enum AlertPriority {
+  low
+  medium
+  high
+  critical
+}
+
+enum AlertCategory {
+  maintenance
+  emergency
+  security
+  community
+  general
+}
+
+enum EngagementType {
+  discussion
+  poll
+  announcement
+}
+
+enum InteractionType {
+  comment
+  vote
+  reaction
+}
+
+
+
+enum HouseType {
+  mansion
+  duplex
+  bungalow
+  flat
+  penthouse
+  terrace
+  semi_detached
+  detached
+  traditional
+}
+
+enum MeterType {
+  single_single
+  singledual
+  three_single
+  three_dual
+  max200
+  max500
+}
+
+enum MeterStatus {
+  active
+  inactive
+}
+
+enum PaymentAccountType {
+  default
+  power
+  service_charge
+}
+
+enum ChargeBearer {
+  facility
+  customer
+}
+
+enum PaymentAccountProvider {
+  paystack
+  providus
+}
+
+enum PropertyType {
+  estate
+  building
+  apartment
+}
+
+enum TrxnChannel {
+  paystack
+  shanono
+}
+
+enum TrxnStatus {
+  success
+  failed
+  pending
+  cancelled
+}
+
+enum Role {
+  security
+  admin
+  manager
+  user
+  houseowner
+  super_admin
+}
+
+enum TrxnCategory {
+  electricity
+  bill
+  wallet
+  service_charge
+}
+
+enum TrxnType {
+  airtime
+  internet
+  tv
+  electricity
+  deposit
+  withdrawal
+}
